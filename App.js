@@ -29,7 +29,7 @@ import { computeScores, normalizedRadarValues, predictStream } from './academicK
 import RadarChart from './RadarChart';
 import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase } from './lib/supabase';
+import { supabase } from './services/supabase';
 
 /** Bundled image for PDF/print header (JPEG; must match file in ./assets/). */
 const PDF_REPORT_BANNER = require('./assets/sgt-report-banner-logo.jpg');

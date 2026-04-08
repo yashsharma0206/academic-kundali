@@ -16,6 +16,9 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Dev-only Node scripts (sharp, etc.) — not used by the mobile bundle; avoids tar extract issues on EAS.
+scripts/
+
 # Secrets (never upload)
 .env
 .env.local

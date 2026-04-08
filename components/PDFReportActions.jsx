@@ -5,7 +5,7 @@ import {
   downloadPDF,
   sharePDF,
   PDF_FILENAME,
-} from '../lib/pdfReportHelpers';
+} from '../services/pdfReportHelpers';
 import styles from './PDFReportActions.module.css';
 
 /**
@@ -120,4 +120,4 @@ export {
   PDF_FILENAME,
   generatePDF,
   generatePDFBlob,
-} from '../lib/pdfReportHelpers';
+} from '../services/pdfReportHelpers';
