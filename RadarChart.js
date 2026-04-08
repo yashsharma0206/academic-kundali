@@ -26,7 +26,12 @@ export default function RadarChart({
   const cx = size / 2;
   const cy = size / 2;
   const R = size * 0.38;
-  const vals = [stem, biology, commerce, arts];
+  const clamp01 = (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return 0;
+    return Math.min(1, Math.max(0, n));
+  };
+  const vals = [clamp01(stem), clamp01(biology), clamp01(commerce), clamp01(arts)];
 
   const pctStr =
     highlightPercent != null && highlightPercent !== ''
@@ -61,7 +66,7 @@ export default function RadarChart({
     return `${pts.map((p) => `${p.x},${p.y}`).join(' ')}`;
   });
 
-  const polyPts = [0, 1, 2, 3].map((i) => point(i, Math.min(1, Math.max(0, vals[i]))));
+  const polyPts = [0, 1, 2, 3].map((i) => point(i, vals[i]));
   const polyStr = polyPts.map((p) => `${p.x},${p.y}`).join(' ');
 
   const axisLines = [0, 1, 2, 3].map((i) => {

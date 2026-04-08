@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Component, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
   useColorScheme,
   Alert,
   ActivityIndicator,
+  InteractionManager,
 } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -30,8 +31,8 @@ import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from './lib/supabase';
 
-/** Bundled PNG for PDF/print header only (must match file in ./assets/). */
-const PDF_REPORT_BANNER_PNG = require('./assets/sgt-report-banner-logo.png');
+/** Bundled image for PDF/print header (JPEG; must match file in ./assets/). */
+const PDF_REPORT_BANNER = require('./assets/sgt-report-banner-logo.jpg');
 
 function escapeHtml(s) {
   return String(s)
@@ -92,8 +93,8 @@ async function assetToDataUri(assetModuleId, mimeType = 'image/png') {
       console.warn('[PDF] web banner fetch:', e?.message);
       return '';
     }
-  }4
-  
+  }
+
   const toFileUri = (path) => {
     if (path == null) return '';
     const p = String(path);
@@ -578,6 +579,40 @@ function YesNoRow({ label, value, onChange }) {
   );
 }
 
+class ReportErrorBoundary extends Component {
+  state = { hasError: false, errorMsg: '' };
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, errorMsg: error?.message || String(error) };
+  }
+
+  componentDidCatch(error, info) {
+    console.warn('[Academic Kundali] ErrorBoundary caught:', error, info?.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <Text style={{ fontSize: 18, fontWeight: '700', color: '#ef4444', marginBottom: 12, textAlign: 'center' }}>
+            Something went wrong
+          </Text>
+          <Text style={{ fontSize: 13, color: '#64748b', textAlign: 'center', marginBottom: 20 }}>
+            {this.state.errorMsg}
+          </Text>
+          <Pressable
+            onPress={() => this.setState({ hasError: false, errorMsg: '' })}
+            style={{ backgroundColor: '#4facfe', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Try again</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function AppContent() {
   const insets = useSafeAreaInsets();
   const systemScheme = useColorScheme();
@@ -607,6 +642,9 @@ function AppContent() {
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  /** Defer QR mount until after transitions — avoids native crashes on some Android builds. */
+  const [qrReady, setQrReady] = useState(false);
+  const [qrFailed, setQrFailed] = useState(false);
 
   const logout = () => {
     setStudentName('');
@@ -688,6 +726,19 @@ function AppContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (page !== 'report' || !result) {
+      setQrReady(false);
+      setQrFailed(false);
+      return;
+    }
+    const task = InteractionManager.runAfterInteractions(() => setQrReady(true));
+    return () => {
+      task?.cancel?.();
+      setQrReady(false);
+    };
+  }, [page, result]);
+
   const inputs = {
     math,
     physics,
@@ -703,7 +754,6 @@ function AppContent() {
 
   const generateReport = () => {
     setError('');
-    // Login page validates these; keep a safety check.
     if (!studentName.trim() || !studentEmail.trim() || !studentPhone.trim()) {
       setError('Please complete your profile (Name, Email, Phone) first.');
       setResult(null);
@@ -711,40 +761,48 @@ function AppContent() {
       return;
     }
 
-    const scores = computeScores(inputs);
-    const prediction = predictStream(inputs);
-    const radar = normalizedRadarValues(scores);
-    const sections = CAREER_MAP[prediction.stream] || {};
+    try {
+      const scores = computeScores(inputs);
+      const prediction = predictStream(inputs);
+      const radar = normalizedRadarValues(scores);
+      const sections = CAREER_MAP[prediction.stream] || {};
 
-    setResult({
-      prediction,
-      scores,
-      radar,
-      sections,
-      studentName: studentName.trim(),
-      studentEmail: studentEmail.trim(),
-      studentPhone: studentPhone.trim(),
-    });
-    setPage('report');
+      setResult({
+        prediction,
+        scores,
+        radar,
+        sections,
+        studentName: studentName.trim(),
+        studentEmail: studentEmail.trim(),
+        studentPhone: studentPhone.trim(),
+      });
+      setPage('report');
 
-    void (async () => {
-      try {
-        const { error } = await supabase.from('students').insert({
-          name: studentName.trim(),
-          email: studentEmail.trim(),
-          phone: studentPhone.trim(),
-          maths: math,
-          physics,
-          chemistry,
-          biology,
-          recommended_stream: prediction.stream,
-          confidence: prediction.confidence,
-        });
-        if (error) throw error;
-      } catch (e) {
-        Alert.alert('Could not save to database', e?.message ?? String(e));
+      const db = supabase;
+      if (db) {
+        void (async () => {
+          try {
+            const { error: dbErr } = await db.from('students').insert({
+              name: studentName.trim(),
+              email: studentEmail.trim(),
+              phone: studentPhone.trim(),
+              maths: math,
+              physics,
+              chemistry,
+              biology,
+              recommended_stream: prediction.stream,
+              confidence: prediction.confidence,
+            });
+            if (dbErr) throw dbErr;
+          } catch (e) {
+            Alert.alert('Could not save to database', e?.message ?? String(e));
+          }
+        })();
       }
-    })();
+    } catch (e) {
+      console.warn('[Academic Kundali] generateReport error:', e);
+      setError('Could not generate report: ' + (e?.message || String(e)));
+    }
   };
 
   const shareReport = async () => {
@@ -785,9 +843,40 @@ function AppContent() {
       if (e) qp.e = e;
       if (ph) qp.p = ph;
     }
-    // This becomes a real clickable link when scanned (camera/Expo Go).
-    return Linking.createURL('result', { queryParams: qp });
+    // createURL can throw in release if the embedded manifest has no scheme — crashes the screen.
+    // QR encoder can throw if the string exceeds max capacity — handle via try/catch + onError on QRCode.
+    try {
+      return Linking.createURL('result', { queryParams: qp });
+    } catch (e1) {
+      try {
+        return Linking.createURL('result', {
+          queryParams: { s: qp.s, c: qp.c },
+        });
+      } catch (e2) {
+        console.warn('[Academic Kundali] createURL failed', e1?.message ?? e1, e2?.message ?? e2);
+        return '';
+      }
+    }
   }, [result, settings.shareAnonymously]);
+
+  /** Shorter payload if the full link is too large for a single QR (byte mode ~2.9k). */
+  const qrCodeString = useMemo(() => {
+    if (!result) return ' ';
+    const full = qrValue.trim();
+    if (!full) return ' ';
+    if (full.length < 2400) return full;
+    try {
+      const { prediction } = result;
+      return Linking.createURL('result', {
+        queryParams: {
+          s: prediction.stream,
+          c: Number(prediction.confidence).toFixed(2),
+        },
+      });
+    } catch {
+      return full;
+    }
+  }, [result, qrValue]);
 
   const downloadReport = async () => {
     if (!result) return;
@@ -795,7 +884,7 @@ function AppContent() {
     try {
       // Web: open print dialog (user can "Save as PDF").
       if (Platform.OS === 'web') {
-        const headerLogoDataUri = await assetToDataUri(PDF_REPORT_BANNER_PNG);
+        const headerLogoDataUri = await assetToDataUri(PDF_REPORT_BANNER, 'image/jpeg');
         console.log('[Academic Kundali PDF] banner (web)', {
           nonEmpty: Boolean(headerLogoDataUri),
           length: headerLogoDataUri?.length ?? 0,
@@ -813,8 +902,8 @@ function AppContent() {
         return;
       }
 
-      const headerLogoDataUri = await assetToDataUri(PDF_REPORT_BANNER_PNG);
-      const resolved = Image.resolveAssetSource(PDF_REPORT_BANNER_PNG);
+      const headerLogoDataUri = await assetToDataUri(PDF_REPORT_BANNER, 'image/jpeg');
+      const resolved = Image.resolveAssetSource(PDF_REPORT_BANNER);
       console.log('[Academic Kundali PDF] banner (native)', {
         nonEmpty: Boolean(headerLogoDataUri),
         length: headerLogoDataUri?.length ?? 0,
@@ -1026,7 +1115,7 @@ function AppContent() {
       >
         <View style={[styles.topBannerWrap, { backgroundColor: theme.card }]}>
           <Image
-            source={require('./assets/sgt-app-top-banner.png')}
+            source={require('./assets/sgt-app-top-banner.jpg')}
             style={styles.topBannerImage}
             resizeMode="contain"
             accessibilityLabel="SGT University — Shree Guru Gobind Singh Tricentenary University, NAAC A+"
@@ -1205,11 +1294,30 @@ function AppContent() {
                   <Text style={styles.qrSub}>
                     Scan this code — it matches the link included when you tap Share summary above.
                   </Text>
+                  {qrValue && qrCodeString !== qrValue ? (
+                    <Text style={[styles.smallMuted, { color: theme.muted, marginBottom: 8 }]}>
+                      QR uses a shorter link (stream + confidence) so it scans reliably; the full link is shown
+                      below.
+                    </Text>
+                  ) : null}
                   <View style={styles.qrBox}>
-                    <QRCode value={qrValue || ' '} size={170} backgroundColor="#ffffff" color="#0f172a" />
+                    {!qrReady ? (
+                      <ActivityIndicator size="large" color="#0f172a" />
+                    ) : qrFailed ? (
+                      <Text style={styles.errorText}>Could not generate QR. Use Share summary instead.</Text>
+                    ) : (
+                      <QRCode
+                        value={qrCodeString || ' '}
+                        size={170}
+                        backgroundColor="#ffffff"
+                        color="#0f172a"
+                        ecl="L"
+                        onError={() => setQrFailed(true)}
+                      />
+                    )}
                   </View>
                   <Text style={styles.qrLink} numberOfLines={3}>
-                    {qrValue}
+                    {qrValue || '—'}
                   </Text>
                   <Text style={styles.qrHint}>
                     Tip: Turn on “Share anonymously” in Settings to hide name/email/phone in the link and QR.
@@ -1260,7 +1368,9 @@ function AppContent() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AppContent />
+      <ReportErrorBoundary>
+        <AppContent />
+      </ReportErrorBoundary>
     </SafeAreaProvider>
   );
 }

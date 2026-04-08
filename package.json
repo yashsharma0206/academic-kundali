@@ -5,13 +5,14 @@
   "scripts": {
     "start": "cross-env CI= expo start",
     "start:tunnel": "cross-env CI= expo start --tunnel",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "lint": "expo lint"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
-    "@react-native-community/slider": "^5.1.2",
+    "@react-native-community/slider": "5.0.1",
     "@supabase/supabase-js": "^2.101.1",
     "expo": "~54.0.33",
     "expo-asset": "~12.0.12",
@@ -30,9 +31,11 @@
   },
   "private": true,
   "devDependencies": {
-    "@types/react": "^19.2.14",
+    "@types/react": "~19.1.10",
     "cross-env": "^10.1.0",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~10.0.0",
     "sharp": "^0.34.5",
-    "typescript": "^6.0.2"
+    "typescript": "~5.9.2"
   }
 }

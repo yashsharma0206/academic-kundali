@@ -1,0 +1,22 @@
+# Keep EAS uploads small and Linux-tar–friendly (no local native trees, deps, or caches).
+
+node_modules/
+.expo/
+dist/
+web-build/
+
+# Regenerated on the build server for managed workflow; local copies can confuse packaging.
+android/
+ios/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
+
+# Secrets (never upload)
+.env
+.env.local
+.env.*.local

@@ -1,12 +1,13 @@
 {
   "expo": {
-    "name": "academic kundali",
+    "name": "Academic kundali",
     "slug": "academic-kundali",
+    "scheme": "academic-kundali",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -16,11 +17,13 @@
       "supportsTablet": true
     },
     "android": {
+      "scheme": "academic-kundali",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.yashsharma86.academickundali"
     },
     "web": {
       "favicon": "./assets/favicon.png"
