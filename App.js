@@ -22,7 +22,6 @@ import * as Sharing from 'expo-sharing';
 import * as Linking from 'expo-linking';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Asset } from 'expo-asset';
-import Slider from '@react-native-community/slider';
 import { StatusBar } from 'expo-status-bar';
 import { CAREER_MAP } from './careerMap';
 import { computeScores, normalizedRadarValues, predictStream } from './academicKundaliLogic';
@@ -535,24 +534,46 @@ function isValidPhone(phone) {
   return digits.length >= 8 && digits.length <= 15;
 }
 
+function clampRating(v) {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return 3;
+  return Math.min(5, Math.max(1, n));
+}
+
+/**
+ * 1–5 rating via Pressables (not `@react-native-community/slider`).
+ * On Android release APKs, the native Slider inside ScrollView often never receives
+ * touches; discrete buttons use the same touch path as the rest of the form and stay reliable.
+ */
 function SubjectRow({ label, value, onChange }) {
+  const v = clampRating(value);
   return (
-    <View style={styles.subjectRow}>
+    <View style={styles.subjectRow} collapsable={false}>
       <View style={styles.subjectHeader}>
         <Text style={styles.subjectLabel}>{label}</Text>
-        <Text style={styles.subjectValue}>{Math.round(value)}</Text>
+        <Text style={styles.subjectValue}>{v}</Text>
       </View>
-      <Slider
-        style={styles.slider}
-        minimumValue={1}
-        maximumValue={5}
-        step={1}
-        value={value}
-        onValueChange={onChange}
-        minimumTrackTintColor="#4facfe"
-        maximumTrackTintColor="#e2e8f0"
-        thumbTintColor="#00a8cc"
-      />
+      <View style={styles.ratingRow} collapsable={false}>
+        {[1, 2, 3, 4, 5].map((n) => {
+          const active = v === n;
+          return (
+            <Pressable
+              key={n}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={`${label}: ${n} out of 5`}
+              onPress={() => onChange(n)}
+              style={({ pressed }) => [
+                styles.ratingChip,
+                active && styles.ratingChipActive,
+                pressed && !active && styles.ratingChipPressed,
+              ]}
+            >
+              <Text style={[styles.ratingChipText, active && styles.ratingChipTextActive]}>{n}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -645,7 +666,6 @@ function AppContent() {
   /** Defer QR mount until after transitions — avoids native crashes on some Android builds. */
   const [qrReady, setQrReady] = useState(false);
   const [qrFailed, setQrFailed] = useState(false);
-
   const logout = () => {
     setStudentName('');
     setStudentEmail('');
@@ -1112,6 +1132,8 @@ function AppContent() {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        nestedScrollEnabled
+        removeClippedSubviews={Platform.OS === 'android' ? false : undefined}
       >
         <View style={[styles.topBannerWrap, { backgroundColor: theme.card }]}>
           <Image
@@ -1527,7 +1549,28 @@ const styles = StyleSheet.create({
   subjectHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   subjectLabel: { fontSize: 14, fontWeight: '600', color: '#334155', flex: 1, paddingRight: 8 },
   subjectValue: { fontSize: 14, fontWeight: '700', color: '#0284c7' },
-  slider: { width: '100%', height: 40 },
+  ratingRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    alignItems: 'center',
+  },
+  ratingChip: {
+    minWidth: 44,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ratingChipActive: { backgroundColor: '#e0f2fe', borderColor: '#4facfe' },
+  ratingChipPressed: { opacity: 0.88 },
+  ratingChipText: { fontSize: 15, color: '#64748b', fontWeight: '700' },
+  ratingChipTextActive: { color: '#0369a1' },
   yesNoRow: { marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   yesNoBtns: { flexDirection: 'row', gap: 8 },
   yesNoChip: {
